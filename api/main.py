@@ -148,13 +148,5 @@ async def query_endpoint(req: QueryRequest):
         "latency_ms": latency_ms
     }
 
-class BenchmarkRequest(BaseModel):
-    strategies: list[str]
-    sample_size: int = None
 
-@app.post("/benchmark")
-async def benchmark_endpoint(req: BenchmarkRequest):
-    from scripts.run_benchmark import run_evaluation
-    results = run_evaluation(req.strategies, sample_size=req.sample_size)
-    return {"results": results}
 

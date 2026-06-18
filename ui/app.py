@@ -1,11 +1,7 @@
 import gradio as gr
 import requests
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 API_URL = "http://localhost:8001/query"
-BENCHMARK_API_URL = "http://localhost:8001/benchmark"
 STRATEGIES = ["naive", "hybrid", "reranker", "graph", "agentic"]
 
 custom_css = """
@@ -191,72 +187,6 @@ def do_query(question, strategy, k):
         """
         return f"Đã xảy ra lỗi khi truy vấn: {str(e)}", [], error_html
 
-def do_benchmark(selected_strategies, sample_size):
-    if not selected_strategies:
-        return [], None, "Vui lòng chọn ít nhất một chiến lược để đánh giá!"
-        
-    try:
-        response = requests.post(BENCHMARK_API_URL, json={
-            "strategies": selected_strategies,
-            "sample_size": int(sample_size) if sample_size else None
-        })
-        response.raise_for_status()
-        data = response.json()
-        results = data.get("results", [])
-        
-        # Format table rows: ["Strategy", "Recall@5", "NDCG@10", "Latency (ms)"]
-        table_rows = [
-            [r["Strategy"], r["Recall@5"], r["NDCG@10"], r["Latency (ms)"]]
-            for r in results
-        ]
-        
-        # Generate comparison grouped bar chart using Matplotlib (Light Theme)
-        fig, ax = plt.subplots(figsize=(10, 5), facecolor='#ffffff')
-        ax.set_facecolor('#ffffff')
-        
-        strategies_names = [r["Strategy"] for r in results]
-        recalls = [r["Recall@5"] for r in results]
-        ndcgs = [r["NDCG@10"] for r in results]
-        
-        x = range(len(strategies_names))
-        width = 0.35
-        
-        rects1 = ax.bar([i - width/2 for i in x], recalls, width, label='Recall@5', color='#4f46e5')
-        rects2 = ax.bar([i + width/2 for i in x], ndcgs, width, label='NDCG@10', color='#9333ea')
-        
-        ax.set_ylabel('Score', color='#475569', fontsize=12)
-        ax.set_title('Quality Comparison Across Strategies', color='#0f172a', fontsize=14, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels(strategies_names, color='#475569')
-        ax.tick_params(colors='#475569')
-        ax.spines['bottom'].set_color('#cbd5e1')
-        ax.spines['top'].set_color('none')
-        ax.spines['right'].set_color('none')
-        ax.spines['left'].set_color('#cbd5e1')
-        ax.legend(facecolor='#f8fafc', edgecolor='#e2e8f0', labelcolor='#1e293b')
-        
-        # Label values on top of bars
-        for rect in rects1:
-            height = rect.get_height()
-            ax.annotate(f'{height:.3f}',
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom', color='#475569', fontsize=9)
-        for rect in rects2:
-            height = rect.get_height()
-            ax.annotate(f'{height:.3f}',
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
-                        xytext=(0, 3),
-                        textcoords="offset points",
-                        ha='center', va='bottom', color='#475569', fontsize=9)
-                        
-        plt.tight_layout()
-        
-        return table_rows, fig, f"Đã thực thi đánh giá thành công trên {len(results)} chiến lược!"
-    except Exception as e:
-        return [], None, f"Lỗi khi thực thi đánh giá: {str(e)}"
-
 custom_head = """
 <script>
 function removeDark() {
@@ -336,37 +266,6 @@ with gr.Blocks(title="AIO Agentic RAG", css=custom_css, head=custom_head) as dem
             fn=do_query,
             inputs=[question_in, strategy_in, k_in],
             outputs=[answer_box, sources_table, info_html]
-        )
-        
-    with gr.Tab("Đánh Giá (Benchmark)"):
-        with gr.Row():
-            strategies_chk = gr.CheckboxGroup(
-                choices=STRATEGIES,
-                value=["naive", "hybrid", "reranker", "graph", "agentic"],
-                label="Chọn các chiến lược đánh giá"
-            )
-            sample_n_in = gr.Number(
-                value=5,
-                precision=0,
-                label="Số lượng mẫu câu hỏi đánh giá (sample_size)"
-            )
-            
-        run_btn = gr.Button("Chạy Đánh Giá (Run Benchmark)", variant="primary")
-        bench_status = gr.Markdown("Sẵn sàng chạy benchmark...")
-        
-        gr.HTML('<div class="section-title">Bảng So Sánh Chỉ Số</div>')
-        bench_table = gr.Dataframe(
-            headers=["Strategy", "Recall@5", "NDCG@10", "Latency (ms)"],
-            label=""
-        )
-        
-        gr.HTML('<div class="section-title">Biểu Đồ So Sánh Trực Quan</div>')
-        bench_chart = gr.Plot(label="Comparison Chart")
-        
-        run_btn.click(
-            fn=do_benchmark,
-            inputs=[strategies_chk, sample_n_in],
-            outputs=[bench_table, bench_chart, bench_status]
         )
 
 if __name__ == "__main__":

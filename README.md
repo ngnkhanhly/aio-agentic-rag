@@ -6,7 +6,7 @@ Hệ thống hỏi đáp pháp luật thông minh (QA) sử dụng kiến trúc 
 
 ## 🏗️ Kiến trúc Hệ thống
 
-Hệ thống được thiết kế theo 3 thành phần cốt lõi:
+Hệ thống được thiết kế theo các thành phần cốt lõi:
 
 ### 1. Kiến trúc Tác tử 2 tầng (Two-Tier Agents)
 *   **Orchestrator Agent**: Đóng vai trò điều phối trung tâm. Nhận câu hỏi từ người dùng, phân tích mục tiêu và định tuyến thông minh đến một trong hai tác tử con (Subagents):
@@ -27,20 +27,16 @@ Hệ thống được thiết kế theo 3 thành phần cốt lõi:
 
 ```text
 ├── api/
-│   └── main.py              # FastAPI Server (Cung cấp endpoint /query và /benchmark)
+│   └── main.py              # FastAPI Server (Cung cấp endpoint /query)
 ├── configs/
 │   └── setting.py           # Quản lý cấu hình & biến môi trường
 ├── scripts/
-│   ├── build_eval_set.py    # Khởi tạo bộ câu hỏi chuẩn đánh giá (16 câu hỏi mẫu)
-│   ├── ingest.py            # Chạy pipeline nạp dữ liệu sử dụng Ingestion Agent
-│   └── run_benchmark.py     # Đánh giá hiệu năng CLI (xuất file CSV kết quả)
+│   └── ingest.py            # Chạy pipeline nạp dữ liệu sử dụng Ingestion Agent
 ├── src/
 │   ├── agents/
 │   │   ├── orchestrator.py  # Orchestrator Agent điều phối chính
 │   │   ├── rag_agent.py     # RAG QA Agent với khả năng tự chấm điểm câu trả lời
 │   │   └── ingestion_agent.py# Ingestion Agent lập kế hoạch xây dựng chỉ mục
-│   ├── evaluation/
-│   │   └── metrics.py       # Cài đặt đo lường Recall@k và NDCG@k
 │   ├── indexing/
 │   │   ├── chroma_store.py  # Quản lý cơ sở dữ liệu vector ChromaDB
 │   │   ├── bm25_index.py    # Xây dựng chỉ mục BM25
@@ -62,7 +58,6 @@ Hệ thống được thiết kế theo 3 thành phần cốt lõi:
 │   └── app.py               # Giao diện Gradio Web UI (Phong cách Premium Light Theme)
 ├── .env.example             # Bản mẫu cấu hình biến môi trường
 ├── .gitignore               # Tệp cấu hình các mục Git bỏ qua
-├── evaluation_set.json      # Bộ câu hỏi kiểm thử chuẩn (Gold Set)
 └── requirements.txt         # Danh sách thư viện Python cần thiết
 ```
 
@@ -101,33 +96,18 @@ Sử dụng Tác tử nạp dữ liệu để tự động hóa toàn bộ quá 
 ```bash
 python scripts/ingest.py
 ```
-*Tệp chỉ mục BM25 và Đồ thị quan hệ sẽ được lưu trữ dưới dạng `.pkl`, cơ sở dữ liệu vector sẽ được lưu tại thư mục `chroma_db/`.*
+*Tệp chỉ mục BM25 và Đồ thị quan hệ sẽ được lưu dưới dạng `.pkl`, cơ sở dữ liệu vector sẽ được lưu tại thư mục `chroma_db/`.*
 
 ### 4. Khởi chạy FastAPI Server
-API Server cung cấp cổng giao tiếp dịch vụ hỏi đáp và đánh giá định lượng:
+Khởi chạy dịch vụ hỏi đáp:
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8001
 ```
 *Tài liệu Swagger UI sẽ khả dụng tại địa chỉ `http://localhost:8001/docs`.*
 
 ### 5. Khởi chạy Gradio Web UI
-Giao diện người dùng tích hợp tab Tra cứu và tab Đánh giá với giao diện **Light Theme** hiện đại:
+Giao diện người dùng tra cứu với giao diện **Light Theme** hiện đại:
 ```bash
 python ui/app.py
 ```
 *Giao diện Web UI sẽ khả dụng tại địa chỉ `http://localhost:7860/`.*
-
----
-
-## 📈 Đánh giá Hệ thống (Evaluation & Benchmarks)
-
-Hệ thống tích hợp bộ công cụ đo lường chất lượng tìm kiếm dựa trên 16 câu hỏi mẫu pháp luật (`evaluation_set.json`):
-*   **Recall@5**: Đo lường tỷ lệ bao phủ tài liệu liên quan trong Top-5 tài liệu truy xuất.
-*   **NDCG@10**: Đo lường mức độ tối ưu trong sắp xếp thứ tự tài liệu liên quan trong Top-10.
-*   **Latency**: Đo lường thời gian phản hồi trung bình (ms).
-
-### Cách chạy kiểm tra tự động qua CLI:
-```bash
-python scripts/run_benchmark.py
-```
-Kết quả so sánh giữa các chiến lược (`naive`, `hybrid`, `reranker`, `graph`, `agentic`) sẽ được ghi ra tệp CSV trong thư mục `evaluation/`. Bạn cũng có thể thực thi và so sánh trực quan qua biểu đồ trên tab **Đánh Giá (Benchmark)** tại Gradio UI.

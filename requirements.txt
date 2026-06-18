@@ -19,4 +19,3 @@ rank_bm25
 pandas
 huggingface-hub
 requests
-matplotlib
