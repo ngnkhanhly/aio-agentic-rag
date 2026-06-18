@@ -82,7 +82,11 @@ def run_evaluation(strategies, sample_size=None):
                 
             latency_ms = (time.perf_counter() - t0) * 1000
             
-            retrieved_ids = [d.metadata.get("doc_id", "") for d in retrieved_docs]
+            retrieved_ids = []
+            for d in retrieved_docs:
+                doc_id = d.metadata.get("doc_id", "")
+                if doc_id and doc_id not in retrieved_ids:
+                    retrieved_ids.append(doc_id)
             
             # Compute metrics
             r5 = recall_at_k(retrieved_ids, relevant_ids, k=5)

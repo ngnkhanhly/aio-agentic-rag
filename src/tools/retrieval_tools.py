@@ -103,22 +103,34 @@ def hybrid_search_tool(query: str, k: int = None, metadata_filter_json: str = ""
     return json.dumps([_doc_to_dict(d) for d in docs], ensure_ascii=False)
 
 @tool
-def rerank_tool(query: str, docs_json: str, k: int = None) -> str:
+def rerank_tool(query: str, docs_json: str = "", k: int = None) -> str:
     """
     Re-rank a list of retrieved documents with a CrossEncoder model.
     Use this to sort the candidates more accurately for high-precision queries.
     Args:
         query: Original user question.
-        docs_json: JSON string list of retrieved documents to re-rank.
+        docs_json: Optional JSON string list of retrieved documents to re-rank. If not provided or if JSON parsing fails, it will use the captured documents.
         k: Top-k to return after reranking.
     Returns:
         JSON string list of reranked documents.
     """
     from langchain_core.documents import Document
-    raw = json.loads(docs_json)
-    docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in raw]
+    docs_list = []
+    if docs_json:
+        try:
+            docs_list = json.loads(docs_json)
+        except Exception as e:
+            print("DEBUG: Warning: JSON parsing failed in rerank_tool, falling back to captured docs:", e)
+            
+    if not docs_list:
+        captured = retrieved_docs_var.get()
+        docs = list(captured)
+    else:
+        docs = [Document(page_content=d["page_content"], metadata=d["metadata"]) for d in docs_list]
+        
     val_k = k or getattr(config.retrieval, "k", 5)
     reranked = rerank(query, docs, k=val_k)
+    retrieved_docs_var.set(reranked)
     return json.dumps([_doc_to_dict(d) for d in reranked], ensure_ascii=False)
 
 @tool
@@ -142,23 +154,41 @@ def graph_traverse_tool(query: str, k: int = None, initial_k: int = 3, max_hops:
     return json.dumps([_doc_to_dict(d) for d in docs], ensure_ascii=False)
 
 @tool
-def generate_answer_tool(query: str, docs_json: str) -> str:
+def generate_answer_tool(query: str, docs_json: str = "") -> str:
     """
     Generate an answer from retrieved documents using the LLM.
     Use this to formulate the final grounded answer with citations.
     Args:
         query: User question.
-        docs_json: JSON string list of retrieved documents.
+        docs_json: Optional JSON string list of retrieved documents. If not provided or if JSON parsing fails, it will use the captured documents.
     Returns:
         Generated answer string with citations.
     """
-    docs_list = json.loads(docs_json)
+    docs_list = []
+    if docs_json:
+        try:
+            docs_list = json.loads(docs_json)
+        except Exception as e:
+            print("DEBUG: Warning: JSON parsing of docs_json failed in generate_answer_tool, falling back to captured docs:", e)
+            
+    if not docs_list:
+        captured = retrieved_docs_var.get()
+        docs_list = [{"metadata": d.metadata, "page_content": d.page_content} for d in captured]
+    else:
+        from langchain_core.documents import Document
+        final_docs = [
+            Document(page_content=d.get("page_content", ""), metadata=d.get("metadata", {}))
+            for d in docs_list
+        ]
+        retrieved_docs_var.set(final_docs)
+        
     context_parts = []
     for i, doc in enumerate(docs_list, 1):
-        title = doc["metadata"].get("title", "Không rõ")
-        doc_id = doc["metadata"].get("doc_id", "unknown")
-        so_ky_hieu = doc["metadata"].get("so_ky_hieu", "")
-        authority = doc["metadata"].get("authority", "")
+        metadata = doc.get("metadata", {}) if isinstance(doc, dict) else {}
+        title = metadata.get("title", "Không rõ")
+        doc_id = metadata.get("doc_id", "unknown")
+        so_ky_hieu = metadata.get("so_ky_hieu", "")
+        authority = metadata.get("authority", "")
         
         citation = f"Tài liệu [{i}]: {title}"
         if so_ky_hieu:
@@ -166,7 +196,8 @@ def generate_answer_tool(query: str, docs_json: str) -> str:
         if authority:
             citation += f" - Ban hành bởi: {authority}"
             
-        context_parts.append(f"{citation}\nNội dung: {doc['page_content']}")
+        page_content = doc.get("page_content", "") if isinstance(doc, dict) else ""
+        context_parts.append(f"{citation}\nNội dung: {page_content}")
         
     context = "\n\n".join(context_parts)
     llm = get_llm()
